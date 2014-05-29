@@ -4,11 +4,17 @@ use Getopt::Long qw(:config bundling);
 use File::Basename;
 use strict;
 
-my $CONFIG;
-$CONFIG->{'domain'} = '1';
+our $CONFIG;
+
+# default values
+$CONFIG->{'domain'} = 'domain1';
 $CONFIG->{'ignored_lines'} = '(SET autocommit=)';
-$CONFIG->{'sproxy_dir'} = '/home/sproxy/log/';
 $CONFIG->{'gf_dir'} = '/opt/glassfish3/glassfish/';
+$CONFIG->{'separator'} = "\|#\]\n";
+$CONFIG->{'filename_format'} = '${GF_DIR}/domains/${DOMAIN}/logs/debug.log';
+
+# read local config
+do "$ENV{HOME}/.ggrep.rc";
 
 my $revert = 0;
 my $icase = 0;
@@ -60,18 +66,9 @@ sub main
     $match = "(?i)" . $match if ($icase);
     print "Matching " . ($revert ? "NOT " : "") . "[$match]\n" if !$quiet;
     
-    my $name;
-    if ($basename =~ "^s") {
-        $name = $CONFIG->{'sproxy_dir'} . "/LOG";
-        if (!$date) {
-            $date = strftime('%Y-%m-%d', localtime); 
-        }
-        $/ = "\n";
-    }
-    else {
-        $name = $CONFIG->{'gf_dir'} . "/domains/domain" . $domain . "/logs/debug.log";
-        $/ = "\|#\]\n";
-    }
+    my $name = get_file_name();
+
+    $/ = $CONFIG->{'separator'};
 
     if ($date) {
         $name .= "." . $date;
@@ -103,6 +100,15 @@ sub main
     if ($count) {
         print "Matched $count elements\n";
     }
+}
+
+sub get_file_name
+{
+    my $GF_DIR = $CONFIG->{'gf_dir'};
+    my $DOMAIN = $domain;
+
+    $CONFIG->{'filename_format'} =~ s/(\${\w+})/$1/gee;
+    return $CONFIG->{'filename_format'};
 }
 
 sub do_tail
@@ -139,7 +145,7 @@ sub do_stats
         $name = "bzcat $name 2>/dev/null |";
     }
     print "Gathering stats.. that may take a while...\n";
-    open(my $fh, $name) or warn "Can't open $name: $!\n";
+    open(my $fh, $name) or die "Can't open $name: $!\n";
     while (my $line = <$fh>) {
         if ($line =~ m/Call to method \[(\S+):(\S+)\] done, time \[([\d\.]+)\]/) {
             $stats->{'count'}++;
@@ -174,7 +180,7 @@ sub do_stats
 sub do_work
 {
     my $name = shift;
-    open(my $fh, $name) or warn "Can't open $name: $!\n";
+    open(my $fh, $name) or die "Can't open $name: $!\n";
     while (my $line = <$fh>) {
         parse_record($line);
     }

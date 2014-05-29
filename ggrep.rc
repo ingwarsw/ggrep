@@ -1,0 +1,8 @@
+
+#$CONFIG->{'domain'} = '2';
+$CONFIG->{'ignored_lines'} = '(SET autocommit=)';
+$CONFIG->{'sproxy_dir'} = '/home/sproxy/log/';
+$CONFIG->{'gf_dir'} = '/opt/glassfish3/glassfish/';
+
+# return not zero
+1;
