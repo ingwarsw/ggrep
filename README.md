@@ -6,9 +6,24 @@ Glassfish Application server log helper
 This litlle script helps searching for information in application log files.
 Its basicly written for Glassfish but can by any logs.
 
+Working not on lines but on records.
+With separator as regexp.
 
 # Usage
 
+#### ggrep
+Like grep + awk.
+
+#### gtail
+Like tail + grep + awk.
+
+#### gless
+Like less (bzless).
+
+#### gstats
+ggrep + count stats from all.
+
+#### common options
 
 ```
 Usage for script:
@@ -32,12 +47,14 @@ Usage for script:
 ```
 
 # Instalation
+To install this little script jusc copy and paste few lines from box below.
+
 ```
 # Go into place where you want to heve them as binaries (/usr/local/bin or $HOME/bin)
 cd ~/bin
 
 # download script
-wget https://raw.githubusercontent.com/ingwarsw/ggrep/master/ggrep
+wget --no-check-certificate https://raw.githubusercontent.com/ingwarsw/ggrep/master/ggrep
 
 # add executable bit
 chmod a+x ggrep
@@ -47,4 +64,5 @@ ln -s ggrep gtail
 ln -s ggrep gless
 ln -s ggrep gstats
 
+# all done
 ```
