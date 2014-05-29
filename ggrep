@@ -1,0 +1,265 @@
+#!/usr/bin/perl -w
+use POSIX qw(strftime);
+use Getopt::Long qw(:config bundling);
+use File::Basename;
+use strict;
+
+my $CONFIG;
+$CONFIG->{'domain'} = '1';
+$CONFIG->{'ignored_lines'} = '(SET autocommit=)';
+$CONFIG->{'sproxy_dir'} = '/home/sproxy/log/';
+$CONFIG->{'gf_dir'} = '/opt/glassfish3/glassfish/';
+
+my $revert = 0;
+my $icase = 0;
+my $noasci = 0;
+my $quiet = 0;
+my $bzip = 0;
+my $only_matching = 0;
+my $count = 0;
+my $domain = $CONFIG->{'domain'};
+my $match = '';
+my $date = '';
+my $max_record_length = 100000;
+my $session = 0;
+my $sort = 't';
+
+my $ignored_lines = $CONFIG->{'ignored_lines'};
+
+my $basename = basename($0);
+my $record = "";
+my $stats = {};
+
+main();
+exit;
+
+sub main
+{
+
+    GetOptions ("revert|v",         => sub { $revert = 1; $noasci = 1 },
+                "icase|i",          => \$icase,
+                "domain|d=s",       => \$domain,
+                "noasci|n",         => \$noasci,
+                "quiet|q",          => \$quiet,
+                "count|c",          => \$count,
+                "date|t=s",         => \$date,
+                "unbzip|b",         => \$bzip,
+                "only-matching|o",  => \$only_matching,
+                "ignore|I=s",       => \$ignored_lines,
+                "max|m=i",          => \$max_record_length,
+                "session|s=i",      => \$session,
+                "sort|S=s",         => \$sort,
+                "help|h|?",         => sub { help() },
+              ) or help();
+    
+    if ($session) {
+        $match = "(\\[$session\\.\\d\\].*?" . join(' ', @ARGV) . ")";
+    } else {
+        $match = "(" . join(' ', @ARGV) . ")";
+    }
+    $match = "(?i)" . $match if ($icase);
+    print "Matching " . ($revert ? "NOT " : "") . "[$match]\n" if !$quiet;
+    
+    my $name;
+    if ($basename =~ "^s") {
+        $name = $CONFIG->{'sproxy_dir'} . "/LOG";
+        if (!$date) {
+            $date = strftime('%Y-%m-%d', localtime); 
+        }
+        $/ = "\n";
+    }
+    else {
+        $name = $CONFIG->{'gf_dir'} . "/domains/domain" . $domain . "/logs/debug.log";
+        $/ = "\|#\]\n";
+    }
+
+    if ($date) {
+        $name .= "." . $date;
+    }
+    if ($bzip) {
+        $name .= ".bz2";
+    } 
+   
+    # pozbywamy sie nadwymiarowych slashy
+    $name =~ s/\/\/+/\//g;
+    
+    print "Filename [$name]\n" if !$quiet; 
+    
+    if ($basename =~ "tail") {
+        do_tail($name);
+    }
+    elsif ($basename =~ "grep") {
+        do_grep($name);
+    }
+    elsif ($basename =~ "less") {
+        do_less($name);
+    }
+    elsif ($basename =~ "stats") {
+        do_stats($name);
+    }
+    else {
+        help();
+    }
+    if ($count) {
+        print "Matched $count elements\n";
+    }
+}
+
+sub do_tail
+{
+    my $name = shift;
+    $name = "tail -F $name 2>/dev/null |";
+    do_work($name);
+}
+
+sub do_grep
+{
+    my $name = shift;
+    if ($bzip) {
+        $name = "bzcat $name 2>/dev/null |";
+    }
+    do_work($name);
+}
+
+sub do_less
+{
+    my $name = shift;
+    if ($bzip) {
+        exec("bzless $name");
+    }
+    else {
+        exec("less $name");
+    }
+}
+
+sub do_stats
+{
+    my $name = shift;
+    if ($bzip) {
+        $name = "bzcat $name 2>/dev/null |";
+    }
+    print "Gathering stats.. that may take a while...\n";
+    open(my $fh, $name) or warn "Can't open $name: $!\n";
+    while (my $line = <$fh>) {
+        if ($line =~ m/Call to method \[(\S+):(\S+)\] done, time \[([\d\.]+)\]/) {
+            $stats->{'count'}++;
+            $stats->{'time'} += $3;
+            $stats->{'proj'}->{$1}->{'count'}++;
+            $stats->{'proj'}->{$1}->{'time'} += $3;
+            $stats->{'proj'}->{$1}->{'fun'}->{$2}->{'count'}++;
+            $stats->{'proj'}->{$1}->{'fun'}->{$2}->{'time'} += $3;
+        }
+    }
+    close($fh);
+    print "Done.\n";
+    printf("%s%-40s: %10s %20s %20s %20s %20s\033[0m\n", ($noasci ? "" : "\033[1;32m"), "Project", "Count", "Min", "Max", "Average", "Sum");
+    foreach my $project (sort sort_proj_stats keys %{$stats->{'proj'}}) {
+        next if ($project =~ m/^(time|count|min|max)$/);
+        if ($revert) {
+            next if ($project =~ m/$match/os);
+        } else {
+            next if ($project !~ m/$match/os);
+        }
+        my $p = $stats->{'proj'}->{$project};
+        printf("%s%-40s: %10d %20.3f %20.3f %20.3f %20.3f\033[0m\n", ($noasci ? "" : "\033[1;34m"), $project, $p->{'count'}, 0, 0, $p->{'time'} / $p->{'count'}, $p->{'time'});
+        foreach my $function (sort sort_fun_stats keys %{$stats->{'proj'}->{$project}->{'fun'}}) {
+            next if ($function =~ m/^(time|count|min|max)$/);
+            my $f = $p->{'fun'}->{$function};
+            printf("     %-35s: %10d %20.3f %20.3f %20.3f %20.3f\n", $function, $f->{'count'}, 0, 0, $f->{'time'} / $f->{'count'}, $f->{'time'});
+        }
+    }
+    printf("%s%-40s: %10d %20.3f %20.3f %20.3f %20.3f\033[0m\n", ($noasci ? "" : "\033[1;32m"), "Total", $stats->{'count'}, 0, 0, $stats->{'time'} / $stats->{'count'}, $stats->{'time'});
+}
+
+sub do_work
+{
+    my $name = shift;
+    open(my $fh, $name) or warn "Can't open $name: $!\n";
+    while (my $line = <$fh>) {
+        parse_record($line);
+    }
+    close($fh);
+}
+
+#sub parse_line
+#{
+#    my $line = shift;
+#    $record .= $line;
+#    if ($line =~ m/\|#\]\n/) {
+#        parse_record($record);
+#        $record = "";
+#    }
+#}
+
+sub parse_record
+{
+    my $record = shift;
+
+    return if ($record =~ m/$ignored_lines/os);
+    if ($revert) {
+        return if ($record =~ m/$match/os);
+    } else {
+        return if ($record !~ m/$match/os);
+    }
+    if ($count) {
+        return $count++;
+    }
+    
+    if ($only_matching) {
+        $record =~ s/.*?$match.*/$1\n/os;
+    }
+    elsif (!$noasci) {
+        $record =~ s/$match/\033[1;32m$1\033[0m/gos;
+    }
+
+    if (length($record) > $max_record_length) {
+        $record = substr($record, 1, $max_record_length) . " ... truncated to $max_record_length\n";
+    }
+    print $record;
+}
+
+sub sort_stats
+{
+    my $a = shift;
+    my $b = shift;
+    my $ta = shift;
+    my $tb = shift;
+    return $ta->{'count'} <=> $tb->{'count'} if ($sort eq "c");
+    return $ta->{'time'} <=> $tb->{'time'} if ($sort eq "t");
+    return $ta->{'time'} / $ta->{'count'} <=> $tb->{'time'} / $tb->{'count'} if ($sort eq "a");
+    return $a cmp $b;
+}
+
+sub sort_proj_stats
+{
+    return sort_stats($a, $b, $stats->{'proj'}->{$a}, $stats->{'proj'}->{$b})
+}
+
+sub sort_fun_stats
+{
+    return $a cmp $b;
+#    return sort_stats($a, $b, $stats->{'proj'}->{$a}, $stats->{'proj'}->{$b})
+#    return $stats->{$a}->{'count'} <=> $stats->{$b}->{'count'};
+}
+sub help
+{
+    print "Usage for script:
+    $basename [opts] <search string>
+
+    --revert        -v          revert match (show only not matching records)
+    --icase         -i          ignore case
+    --only-matching -o          print only the matched (non-empty) parts of a matching line
+    --unbzip        -b          unbzip log (for ggrep only)
+    --noasci        -n          no ansi colors
+    --quiet         -q          do not print any extra informations
+    --count         -c          print count of matching elements instead of printing them
+    --date          -t date     date of file to search in format yyy-mm-dd
+    --domain        -d name     domain name to search (without domain prefix)
+    --ignore        -I regexp   records containing regexp will be ignored
+    --max           -m int      max record length
+    --session       -s int      glassfish session id
+
+    <search string>         regexp string to search for
+";
+    exit(1);
+}
