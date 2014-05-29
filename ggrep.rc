@@ -1,8 +1,18 @@
 
-#$CONFIG->{'domain'} = '2';
+# Change default domain name (still can be changed by command line)
+$CONFIG->{'domain'} = 'domain1';
+
+# Regexp for ignored lines (still can be changed by command line)
 $CONFIG->{'ignored_lines'} = '(SET autocommit=)';
-$CONFIG->{'sproxy_dir'} = '/home/sproxy/log/';
+
+# Glassfish directory
 $CONFIG->{'gf_dir'} = '/opt/glassfish3/glassfish/';
+
+# Field separator (default glassfish)
+$CONFIG->{'separator'} = "\|#\]\n";
+
+# Full path to files with logs.
+$CONFIG->{'filename_format'} = '${GF_DIR}/domains/${DOMAIN}/logs/debug.log';
 
 # return not zero
 1;
