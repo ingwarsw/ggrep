@@ -241,6 +241,7 @@ sub sort_fun_stats
 #    return sort_stats($a, $b, $stats->{'proj'}->{$a}, $stats->{'proj'}->{$b})
 #    return $stats->{$a}->{'count'} <=> $stats->{$b}->{'count'};
 }
+
 sub help
 {
     print "Usage for script:
@@ -259,7 +260,7 @@ sub help
     --max           -m int      max record length
     --session       -s int      glassfish session id
 
-    <search string>         regexp string to search for
+    <search string>             regexp string to search for
 ";
     exit(1);
 }
