@@ -1,3 +1,4 @@
+# This file should be put in ~/.ggrep.rc
 
 # Change default domain name (still can be changed by command line)
 $CONFIG->{'domain'} = 'domain1';
@@ -13,6 +14,9 @@ $CONFIG->{'separator'} = "\|#\]\n";
 
 # Full path to files with logs.
 $CONFIG->{'filename_format'} = '${GF_DIR}/domains/${DOMAIN}/logs/debug.log';
+
+# How often put dots while gathering stats (every x records)
+$CONFIG->{'stats_dot_every'} = 50000;
 
 # return not zero
 1;

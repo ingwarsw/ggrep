@@ -12,6 +12,7 @@ $CONFIG->{'ignored_lines'} = '(SET autocommit=)';
 $CONFIG->{'gf_dir'} = '/opt/glassfish3/glassfish/';
 $CONFIG->{'separator'} = "\|#\]\n";
 $CONFIG->{'filename_format'} = '${GF_DIR}/domains/${DOMAIN}/logs/debug.log';
+$CONFIG->{'stats_dot_every'} = 50000;
 
 # read local config
 do "$ENV{HOME}/.ggrep.rc";
@@ -144,9 +145,14 @@ sub do_stats
     if ($bzip) {
         $name = "bzcat $name 2>/dev/null |";
     }
-    print "Gathering stats.. that may take a while...\n";
+    print "Gathering stats.. that may take a while...";
+    myflush();
     open(my $fh, $name) or die "Can't open $name: $!\n";
     while (my $line = <$fh>) {
+        if ($. % $CONFIG->{'stats_dot_every'} == 0) {
+            print ".";
+            myflush();
+        }
         if ($line =~ m/Call to method \[(\S+):(\S+)\] done, time \[([\d\.]+)\]/) {
             $stats->{'count'}++;
             $stats->{'time'} += $3;
@@ -156,8 +162,9 @@ sub do_stats
             $stats->{'proj'}->{$1}->{'fun'}->{$2}->{'time'} += $3;
         }
     }
+    print " done.\n";
+    print "Processed $. records.\n";
     close($fh);
-    print "Done.\n";
     printf("%s%-40s: %10s %20s %20s %20s %20s\033[0m\n", ($noasci ? "" : "\033[1;32m"), "Project", "Count", "Min", "Max", "Average", "Sum");
     foreach my $project (sort sort_proj_stats keys %{$stats->{'proj'}}) {
         next if ($project =~ m/^(time|count|min|max)$/);
@@ -246,6 +253,10 @@ sub sort_fun_stats
     return $a cmp $b;
 #    return sort_stats($a, $b, $stats->{'proj'}->{$a}, $stats->{'proj'}->{$b})
 #    return $stats->{$a}->{'count'} <=> $stats->{$b}->{'count'};
+}
+
+sub myflush {
+    local $| = 1;
 }
 
 sub help
