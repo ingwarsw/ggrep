@@ -14,6 +14,8 @@ $CONFIG->{'separator'} = "\|#\]\n";
 $CONFIG->{'filename_format'} = '${GF_DIR}/domains/${DOMAIN}/logs/debug.log';
 $CONFIG->{'stats_dot_every'} = 50000;
 
+# red global config
+do "/etc/ggrep.rc";
 # read local config
 do "$ENV{HOME}/.ggrep.rc";
 
